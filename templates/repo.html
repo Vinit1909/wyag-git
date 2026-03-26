@@ -23,6 +23,7 @@
         <h2 class="text-center text-xl text-github-blue font-semibold mb-4">Current Repository: {{ current_repo if current_repo else 'None' }}</h2>
 
         <form action="/switch" method="post" class="mb-6 box-shadow bg-github-darker p-4 rounded-md">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="mb-4">
                 <label class="block mb-2 font-semibold">Switch to Repository</label>
                 <div class="relative">
@@ -54,6 +55,7 @@
         {% if current_repo %}
         <div id="add-file" class="section-spacing mb-6 box-shadow bg-github-darker p-4 rounded-md">
             <form action="/add" method="post">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="mb-4">
                     <label class="block mb-2 font-semibold">Filename</label>
                     <input class="block w-full bg-white border-custom rounded py-2 px-3 leading-tight focus:outline-none focus:bg-white focus:border-gray-500 text-black" type="text" name="filename" required>
@@ -70,6 +72,7 @@
 
         <div id="commit" class="section-spacing mb-6 box-shadow bg-github-darker p-4 rounded-md">
             <form action="/commit" method="post">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="mb-4">
                     <label class="block mb-2 font-semibold">Commit Message</label>
                     <input class="block w-full bg-white border-custom rounded py-2 px-3 leading-tight focus:outline-none focus:bg-white focus:border-gray-500 text-black" type="text" name="message" required>
@@ -110,6 +113,7 @@
 
         <div id="read-file" class="section-spacing mb-6 box-shadow bg-github-darker p-4 rounded-md">
             <form action="/read" method="post">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="mb-4">
                     <label class="block mb-2 font-semibold">Filename</label>
                     <input class="block w-full bg-white border-custom rounded py-2 px-3 leading-tight focus:outline-none focus:bg-white focus:border-gray-500 text-black" type="text" name="filename" required>
@@ -128,6 +132,7 @@
 
         <div id="upload-file" class="section-spacing mb-6 box-shadow bg-github-darker p-4 rounded-md">
             <form action="/upload" method="post" enctype="multipart/form-data">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="mb-4">
                     <label class="block mb-2 font-semibold">Upload File</label>
                     <input type="file" name="file" class="block w-full bg-white border-custom rounded py-2 px-3 leading-tight focus:outline-none focus:bg-white focus:border-gray-500 text-black" required>
@@ -152,6 +157,7 @@
 
         <div id="delete-file" class="section-spacing mb-6 box-shadow bg-github-darker p-4 rounded-md">
             <form action="/delete_file" method="post">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="mb-4">
                     <label class="block mb-2 font-semibold">Filename</label>
                     <input class="block w-full bg-white border-custom rounded py-2 px-3 leading-tight focus:outline-none focus:bg-white focus:border-gray-500 text-black" type="text" name="filename" required>
@@ -164,6 +170,7 @@
 
         <div id="merge" class="section-spacing mb-6 box-shadow bg-github-darker p-4 rounded-md">
             <form action="/merge" method="post">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="mb-4">
                     <label class="block mb-2 font-semibold">Branch to Merge</label>
                     <input class="block w-full bg-white border-custom rounded py-2 px-3 leading-tight focus:outline-none focus:bg-white focus:border-gray-500 text-black" type="text" name="branch" required>

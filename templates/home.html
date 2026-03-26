@@ -15,6 +15,7 @@
   {% endwith %}
   
   <form action="/init" method="post" class="mb-6 box-shadow bg-github-darker p-4 rounded-md">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="mb-4">
       <label class="block mb-2 font-semibold text-white">New Repository Name</label>
       <input class="block w-full bg-white border-custom rounded py-2 px-3 leading-tight focus:outline-none focus:bg-white focus:border-gray-500 text-black" type="text" name="repo_name" required>
@@ -25,6 +26,7 @@
   </form>
 
   <form action="/switch" method="post" class="mb-6 box-shadow bg-github-darker p-4 rounded-md">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="mb-4">
       <label class="block mb-2 font-semibold text-white">Switch to Repository</label>
       <div class="relative">
@@ -43,6 +45,7 @@
   </form>
 
   <form action="/delete_repo" method="post" class="box-shadow bg-github-darker p-4 rounded-md">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="mb-4">
       <label class="block mb-2 font-semibold text-white">Delete Repository</label>
       <div class="relative">

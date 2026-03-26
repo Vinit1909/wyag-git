@@ -1,15 +1,25 @@
 import os
 import shutil
-from flask import Flask, render_template, request, redirect, url_for, flash
+from flask import Flask, render_template, request, redirect, url_for, flash, session
 import subprocess
 from dotenv import load_dotenv
 import logging
+from flask_wtf.csrf import CSRFProtect
 
 # Load environment variables from .env file
 load_dotenv()
 
 app = Flask(__name__)
-app.secret_key = os.getenv('FLASK_SECRET_KEY', 'default_secret_key')
+
+secret_key = os.getenv('FLASK_SECRET_KEY')
+if not secret_key:
+    raise RuntimeError(
+        "FLASK_SECRET_KEY environment variable is not set. "
+        "Create a .env file with FLASK_SECRET_KEY=<random-string>."
+    )
+app.secret_key = secret_key
+
+csrf = CSRFProtect(app)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -22,16 +32,20 @@ REPOS_DIR = 'repos'  # Directory to store multiple repositories
 # Ensure the repos directory exists
 if not os.path.exists(REPOS_DIR):
     os.makedirs(REPOS_DIR)
-CURRENT_REPO = None
+
 
 def list_repos():
     """List all directories in REPOS_DIR excluding hidden files."""
     try:
-        repos = [repo for repo in os.listdir(REPOS_DIR) if os.path.isdir(os.path.join(REPOS_DIR, repo)) and not repo.startswith('.')]
+        repos = [
+            repo for repo in os.listdir(REPOS_DIR)
+            if os.path.isdir(os.path.join(REPOS_DIR, repo)) and not repo.startswith('.')
+        ]
         return repos
     except Exception as e:
         logger.error(f"Error listing repositories: {e}")
         return []
+
 
 @app.route('/')
 def home():
@@ -44,15 +58,15 @@ def home():
         logger.error(f"Error in home route: {e}")
         return "Internal Server Error", 500
 
+
 @app.route('/init', methods=['POST'])
 def init_repo():
     try:
-        global CURRENT_REPO
         repo_name = request.form['repo_name']
         repo_path = os.path.join(REPOS_DIR, repo_name)
         if not os.path.exists(repo_path):
             os.makedirs(repo_path)
-            CURRENT_REPO = repo_path
+            session['current_repo'] = repo_path
             output = run_wyag_command(['init'])
             flash(f"Repository '{repo_name}' initialized successfully.", "success")
         else:
@@ -62,14 +76,14 @@ def init_repo():
         logger.error(f"Error in init_repo: {e}")
         return "Internal Server Error", 500
 
+
 @app.route('/switch', methods=['POST'])
 def switch_repo():
     try:
-        global CURRENT_REPO
         repo_name = request.form['repo_name']
         repo_path = os.path.join(REPOS_DIR, repo_name)
         if os.path.exists(repo_path):
-            CURRENT_REPO = repo_path
+            session['current_repo'] = repo_path
             flash(f"Switched to repository '{repo_name}'.", "success")
             return redirect(url_for('repo'))
         else:
@@ -79,23 +93,24 @@ def switch_repo():
         logger.error(f"Error in switch_repo: {e}")
         return "Internal Server Error", 500
 
+
 @app.route('/delete_repo', methods=['POST'])
 def delete_repo():
     try:
-        global CURRENT_REPO
         repo_name = request.form['repo_name']
         repo_path = os.path.join(REPOS_DIR, repo_name)
         if os.path.exists(repo_path):
             shutil.rmtree(repo_path)
             flash(f"Repository '{repo_name}' deleted.", "success")
-            if CURRENT_REPO == repo_path:
-                CURRENT_REPO = None
+            if session.get('current_repo') == repo_path:
+                session.pop('current_repo', None)
         else:
             flash("Repository does not exist.", "error")
         return redirect(url_for('home'))
     except Exception as e:
         logger.error(f"Error in delete_repo: {e}")
         return "Internal Server Error", 500
+
 
 def get_repo_file_tree(repo_path):
     try:
@@ -113,6 +128,7 @@ def get_repo_file_tree(repo_path):
         logger.error(f"Error in get_repo_file_tree: {e}")
         return []
 
+
 def list_user_files(repo_path):
     try:
         user_files = []
@@ -128,70 +144,99 @@ def list_user_files(repo_path):
         logger.error(f"Error in list_user_files: {e}")
         return []
 
+
 @app.route('/repo')
 def repo():
     try:
-        if CURRENT_REPO:
+        current_repo = session.get('current_repo')
+        if current_repo:
             status_output = run_wyag_command(['status'])
             log_output = run_wyag_command(['log'])
-            user_files = list_user_files(CURRENT_REPO)
+            user_files = list_user_files(current_repo)
         else:
             status_output = log_output = "No repository selected."
             user_files = []
-        return render_template('repo.html', status_output=status_output, log_output=log_output, current_repo=CURRENT_REPO, repos=list_repos(), user_files=user_files)
+        return render_template(
+            'repo.html',
+            status_output=status_output,
+            log_output=log_output,
+            current_repo=current_repo,
+            repos=list_repos(),
+            user_files=user_files
+        )
     except Exception as e:
         logger.error(f"Error in repo route: {e}")
         return "Internal Server Error", 500
 
+
 @app.route('/add', methods=['POST'])
 def add_file():
     try:
+        current_repo = session.get('current_repo')
         filename = request.form['filename']
         content = request.form['content']
-        filepath = os.path.join(CURRENT_REPO, filename)
+        filepath = os.path.join(current_repo, filename)
         with open(filepath, 'w') as f:
             f.write(content)
-        output = run_wyag_command(['add', filename])
+        run_wyag_command(['add', filename])
         flash(f"File '{filename}' added.", "success")
         return redirect(url_for('repo'))
     except Exception as e:
         logger.error(f"Error in add_file: {e}")
         return "Internal Server Error", 500
 
+
 @app.route('/commit', methods=['POST'])
 def commit():
     try:
         message = request.form['message']
         run_wyag_command(['add', '.'])  # Ensure all changes are staged before committing
-        output = run_wyag_command(['commit', '-m', message])
+        run_wyag_command(['commit', '-m', message])
         flash(f"Commit '{message}' created.", "success")
         return redirect(url_for('repo'))
     except Exception as e:
         logger.error(f"Error in commit: {e}")
         return "Internal Server Error", 500
 
+
 @app.route('/status', methods=['GET'])
 def status():
     try:
+        current_repo = session.get('current_repo')
         status_output = run_wyag_command(['status'])
         log_output = run_wyag_command(['log'])
-        return render_template('repo.html', status_output=status_output, log_output=log_output, current_repo=CURRENT_REPO, repos=list_repos())
+        return render_template(
+            'repo.html',
+            status_output=status_output,
+            log_output=log_output,
+            current_repo=current_repo,
+            repos=list_repos()
+        )
     except Exception as e:
         logger.error(f"Error in status: {e}")
         return "Internal Server Error", 500
 
+
 @app.route('/log', methods=['GET'])
 def log():
     try:
+        current_repo = session.get('current_repo')
         log_output = run_wyag_command(['log'])
-        return render_template('repo.html', log_output=log_output, current_repo=CURRENT_REPO, repos=list_repos())
+        return render_template(
+            'repo.html',
+            log_output=log_output,
+            current_repo=current_repo,
+            repos=list_repos()
+        )
     except Exception as e:
         logger.error(f"Error in log: {e}")
         return "Internal Server Error", 500
 
+
 @app.route('/read', methods=['POST'])
 def read_file():
     try:
+        current_repo = session.get('current_repo')
         filename = request.form['filename']
         sha = get_file_sha(filename)
         if sha:
@@ -202,16 +247,25 @@ def read_file():
             flash(file_content, "error")
         status_output = run_wyag_command(['status'])
         log_output = run_wyag_command(['log'])
-        return render_template('repo.html', file_content=file_content, status_output=status_output, log_output=log_output, current_repo=CURRENT_REPO, repos=list_repos())
+        return render_template(
+            'repo.html',
+            file_content=file_content,
+            status_output=status_output,
+            log_output=log_output,
+            current_repo=current_repo,
+            repos=list_repos()
+        )
     except Exception as e:
         logger.error(f"Error in read_file: {e}")
         return "Internal Server Error", 500
 
+
 @app.route('/delete_file', methods=['POST'])
 def delete_file():
     try:
+        current_repo = session.get('current_repo')
         filename = request.form['filename']
-        filepath = os.path.join(CURRENT_REPO, filename)
+        filepath = os.path.join(current_repo, filename)
         if os.path.exists(filepath):
             os.remove(filepath)
             run_wyag_command(['rm', filename])
@@ -223,20 +277,17 @@ def delete_file():
         logger.error(f"Error in delete_file: {e}")
         return "Internal Server Error", 500
 
+
 @app.route('/merge', methods=['POST'])
 def merge():
-    try:
-        branch = request.form['branch']
-        output = run_wyag_command(['merge', branch])
-        flash(output, "success")
-        return redirect(url_for('repo'))
-    except Exception as e:
-        logger.error(f"Error in merge: {e}")
-        return "Internal Server Error", 500
+    flash("Merge is not yet implemented in this version of WYAG.", "error")
+    return redirect(url_for('repo'))
+
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
     try:
+        current_repo = session.get('current_repo')
         if 'file' not in request.files:
             flash('No file part', 'error')
             return redirect(url_for('repo'))
@@ -245,7 +296,7 @@ def upload_file():
             flash('No selected file', 'error')
             return redirect(url_for('repo'))
         if file:
-            filepath = os.path.join(CURRENT_REPO, file.filename)
+            filepath = os.path.join(current_repo, file.filename)
             file.save(filepath)
             run_wyag_command(['add', file.filename])
             flash(f"File '{file.filename}' uploaded and added.", 'success')
@@ -254,16 +305,18 @@ def upload_file():
         logger.error(f"Error in upload_file: {e}")
         return "Internal Server Error", 500
 
+
 @app.route('/modify_file', methods=['POST', 'GET'])
 def modify_file():
     try:
+        current_repo = session.get('current_repo')
         if request.method == 'POST':
             filename = request.form['filename']
             new_content = request.form['new_content']
-            filepath = os.path.join(CURRENT_REPO, filename)
+            filepath = os.path.join(current_repo, filename)
             if os.path.exists(filepath):
-                with open(filepath, 'a') as f:
-                    f.write('\n' + new_content)  # Add a newline character before appending the new content
+                with open(filepath, 'w') as f:
+                    f.write(new_content)
                 run_wyag_command(['add', filename])
                 flash(f"File '{filename}' modified.", 'success')
             else:
@@ -272,7 +325,7 @@ def modify_file():
         else:
             filename = request.args.get('filename')
             if filename:
-                filepath = os.path.join(CURRENT_REPO, filename)
+                filepath = os.path.join(current_repo, filename)
                 if os.path.exists(filepath):
                     with open(filepath, 'r') as f:
                         current_content = f.read()
@@ -285,24 +338,43 @@ def modify_file():
         logger.error(f"Error in modify_file: {e}")
         return "Internal Server Error", 500
 
+
 def run_wyag_command(command):
-    if not CURRENT_REPO:
+    current_repo = session.get('current_repo')
+    if not current_repo:
         return "No repository selected."
     try:
-        result = subprocess.run([WYAG_PATH] + command, cwd=CURRENT_REPO, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        result = subprocess.run(
+            [WYAG_PATH] + command,
+            cwd=current_repo,
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
         logger.info(f"Command: {command}\nOutput: {result.stdout}")
         return result.stdout
     except subprocess.CalledProcessError as e:
         logger.error(f"Command: {command}\nError: {e.stderr}")
         return e.stderr
 
+
 def get_file_sha(filename):
+    current_repo = session.get('current_repo')
     try:
-        result = subprocess.run([WYAG_PATH, 'hash-object', filename], cwd=CURRENT_REPO, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        result = subprocess.run(
+            [WYAG_PATH, 'hash-object', filename],
+            cwd=current_repo,
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
         return result.stdout.strip()
     except subprocess.CalledProcessError as e:
         logger.error(f"Error getting SHA for file {filename}: {e.stderr}")
         return None
+
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
