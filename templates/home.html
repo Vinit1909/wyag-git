@@ -1,66 +1,117 @@
 {% extends "base.html" %}
 
-{% block title %}WYAG Web App - Home{% endblock %}
+{% block title %}WYAG — Home{% endblock %}
 
 {% block content %}
-<div class="container-custom mt-6 bg-github-darker p-6 rounded-md">
-  {% with messages = get_flashed_messages(with_categories=true) %}
-    {% if messages %}
-      {% for category, message in messages %}
-        <div class="mt-4 px-4 py-2 text-center rounded-md {{ 'bg-github-green text-white' if category == 'success' else 'bg-red-500 text-white' }}">
-          <p>{{ message }}</p>
+<div class="min-h-screen flex flex-col items-center justify-center px-4 py-12">
+
+  <!-- Logo / Header -->
+  <div class="mb-10 text-center">
+    <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gh-surface border border-gh-border mb-4">
+      <!-- Git branch icon -->
+      <svg xmlns="http://www.w3.org/2000/svg" class="w-8 h-8 text-gh-blue" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+        <circle cx="6"  cy="4"  r="2"/>
+        <circle cx="6"  cy="20" r="2"/>
+        <circle cx="18" cy="8"  r="2"/>
+        <path stroke-linecap="round" d="M6 6v10M6 6c3 0 5 1 6 3s3 3 6 3"/>
+      </svg>
+    </div>
+    <h1 class="text-3xl font-bold tracking-tight text-gh-text">WYAG</h1>
+    <p class="mt-1 text-gh-muted text-sm">Write Yourself a Git — Web UI</p>
+  </div>
+
+  <!-- Cards -->
+  <div class="w-full max-w-md space-y-4">
+
+    <!-- Init Repository -->
+    <div class="bg-gh-surface border border-gh-border rounded-xl p-6 shadow-lg">
+      <h2 class="text-gh-text font-semibold mb-4 flex items-center gap-2">
+        <span class="text-gh-green text-lg">+</span> New Repository
+      </h2>
+      <form action="/init" method="post" class="flex gap-3">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input
+          type="text" name="repo_name" required
+          placeholder="my-project"
+          class="flex-1 bg-gh-bg border border-gh-border rounded-lg px-3 py-2 text-gh-text text-sm placeholder-gh-subtle focus:outline-none focus:border-gh-blue focus:ring-1 focus:ring-gh-blue transition-colors"
+        >
+        <button type="submit"
+          class="bg-gh-green hover:bg-gh-green-light text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors whitespace-nowrap">
+          Initialize
+        </button>
+      </form>
+    </div>
+
+    <!-- Switch Repository -->
+    {% if repos %}
+    <div class="bg-gh-surface border border-gh-border rounded-xl p-6 shadow-lg">
+      <h2 class="text-gh-text font-semibold mb-4 flex items-center gap-2">
+        <span class="text-gh-blue text-lg">↔</span> Open Repository
+      </h2>
+      <form action="/switch" method="post" class="flex gap-3">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <select name="repo_name" required
+          class="flex-1 bg-gh-bg border border-gh-border rounded-lg px-3 py-2 text-gh-text text-sm focus:outline-none focus:border-gh-blue focus:ring-1 focus:ring-gh-blue transition-colors">
+          {% for repo in repos %}
+            {% if repo != ".DS_Store" %}
+              <option value="{{ repo }}">{{ repo }}</option>
+            {% endif %}
+          {% endfor %}
+        </select>
+        <button type="submit"
+          class="bg-gh-blue-dark hover:bg-gh-blue text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors whitespace-nowrap">
+          Open
+        </button>
+      </form>
+    </div>
+
+    <!-- Delete Repository -->
+    <div class="bg-gh-surface border border-gh-border rounded-xl p-6 shadow-lg" x-data="{ confirming: false }">
+      <h2 class="text-gh-text font-semibold mb-4 flex items-center gap-2">
+        <span class="text-gh-red text-lg">✕</span> Delete Repository
+      </h2>
+      <form action="/delete_repo" method="post" x-on:submit.prevent="confirming = true" id="delete-repo-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="flex gap-3">
+          <select name="repo_name" required id="delete-repo-select"
+            class="flex-1 bg-gh-bg border border-gh-border rounded-lg px-3 py-2 text-gh-text text-sm focus:outline-none focus:border-gh-red focus:ring-1 focus:ring-gh-red transition-colors">
+            {% for repo in repos %}
+              {% if repo != ".DS_Store" %}
+                <option value="{{ repo }}">{{ repo }}</option>
+              {% endif %}
+            {% endfor %}
+          </select>
+          <button type="button" @click="confirming = true"
+            class="bg-gh-red-muted hover:bg-gh-red text-gh-red-light hover:text-white text-sm font-medium px-4 py-2 rounded-lg border border-gh-red transition-all whitespace-nowrap">
+            Delete
+          </button>
         </div>
-      {% endfor %}
+      </form>
+
+      <!-- Confirmation overlay -->
+      <div x-show="confirming" x-cloak
+        class="mt-4 bg-gh-red-muted border border-gh-red rounded-lg p-4">
+        <p class="text-gh-red-light text-sm font-medium mb-3">
+          This will permanently delete the repository and all its history. Are you sure?
+        </p>
+        <div class="flex gap-2 justify-end">
+          <button @click="confirming = false"
+            class="text-sm px-3 py-1.5 rounded-lg border border-gh-border text-gh-muted hover:text-gh-text hover:border-gh-text transition-colors">
+            Cancel
+          </button>
+          <button @click="confirming = false; document.getElementById('delete-repo-form').submit()"
+            class="text-sm px-3 py-1.5 rounded-lg bg-gh-red hover:bg-gh-red-light text-white transition-colors">
+            Yes, delete
+          </button>
+        </div>
+      </div>
+    </div>
+    {% else %}
+    <div class="bg-gh-surface border border-gh-border rounded-xl p-6 text-center text-gh-muted text-sm">
+      No repositories yet. Create your first one above.
+    </div>
     {% endif %}
-  {% endwith %}
-  
-  <form action="/init" method="post" class="mb-6 box-shadow bg-github-darker p-4 rounded-md">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <div class="mb-4">
-      <label class="block mb-2 font-semibold text-white">New Repository Name</label>
-      <input class="block w-full bg-white border-custom rounded py-2 px-3 leading-tight focus:outline-none focus:bg-white focus:border-gray-500 text-black" type="text" name="repo_name" required>
-    </div>
-    <div class="flex justify-center">
-        <button class="w-1/2 bg-black from-gray-700 via-gray-900 to-black text-white py-2 px-4 rounded hover:bg-gray-800 px-3 py-2 rounded text-white hover:text-green-400">Initialize Repository</button>
-    </div>
-  </form>
 
-  <form action="/switch" method="post" class="mb-6 box-shadow bg-github-darker p-4 rounded-md">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <div class="mb-4">
-      <label class="block mb-2 font-semibold text-white">Switch to Repository</label>
-      <div class="relative">
-        <select name="repo_name" class="block w-full bg-white border-custom rounded py-2 px-3 leading-tight focus:outline-none focus:bg-white focus:border-gray-500 text-black" required>
-          {% for repo in repos %}
-            {% if repo != ".DS_Store" %}
-              <option value="{{ repo }}">{{ repo }}</option>
-            {% endif %}
-          {% endfor %}
-        </select>
-      </div>
-    </div>
-    <div class="flex justify-center">
-        <button class="w-1/2 bg-black from-gray-700 via-gray-900 to-black text-white py-2 px-4 rounded hover:bg-gray-800 px-3 py-2 rounded text-white hover:text-green-400">Switch Repository</button>
-    </div>
-  </form>
-
-  <form action="/delete_repo" method="post" class="box-shadow bg-github-darker p-4 rounded-md">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <div class="mb-4">
-      <label class="block mb-2 font-semibold text-white">Delete Repository</label>
-      <div class="relative">
-        <select name="repo_name" class="block w-full bg-white border-custom rounded py-2 px-3 leading-tight focus:outline-none focus:bg-white focus:border-gray-500 text-black" required>
-          {% for repo in repos %}
-            {% if repo != ".DS_Store" %}
-              <option value="{{ repo }}">{{ repo }}</option>
-            {% endif %}
-          {% endfor %}
-        </select>
-      </div>
-    </div>
-    <div class="flex justify-center">
-        <button class="w-1/2 bg-black from-gray-700 via-gray-900 to-black text-white py-2 px-4 rounded hover:bg-gray-800 px-3 py-2 rounded text-white hover:text-red-400">Delete Repository</button>
-    </div>
-  </form>
+  </div><!-- /cards -->
 </div>
 {% endblock %}

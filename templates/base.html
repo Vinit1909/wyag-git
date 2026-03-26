@@ -1,84 +1,159 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="h-full">
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}WYAG{% endblock %}</title>
-  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
-  <style>
-    .section-spacing {
-      margin-bottom: 20px;
-    }
-    .container-custom {
-      max-width: 600px;
-      margin: 0 auto;
-    }
-    .bg-github-dark {
-      background-color: #24292d;
-    }
-    .bg-github-darker {
-      background-color: #2b3137;
-    }
-    .text-github-green {
-      color: #2fbb4f;
-    }
-    .text-github-blue {
-      color: #0d74e7;
-    }
-    .border-custom {
-      border: 1px solid #d1d5db;
-    }
-    .button-custom {
-      background-color: #2fbb4f;
-    }
-    .button-custom:hover {
-      background-color: #24963c;
-    }
-    .box-shadow {
-      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-    }
-    .text-white {
-      color: #ffffff;
-    }
-    .text-black {
-      color: #000000;
-    }
-    .max-h-40 {
-      max-height: 10rem;
-    }
-    .overflow-auto {
-      overflow: auto;
-    } 
-  </style>
+
+  <!-- Tailwind v3 Play CDN with GitHub-dark theme extension -->
+  <script src="https://cdn.tailwindcss.com"></script>
   <script>
-    function scrollToElement(id) {
-      document.getElementById(id).scrollIntoView({ behavior: 'smooth' });
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            gh: {
+              bg:           '#0d1117',
+              surface:      '#161b22',
+              overlay:      '#1c2128',
+              border:       '#30363d',
+              'border-muted': '#21262d',
+              text:         '#e6edf3',
+              muted:        '#8b949e',
+              subtle:       '#6e7681',
+              green:        '#238636',
+              'green-light':'#2ea043',
+              'green-muted':'rgba(46,160,67,0.15)',
+              red:          '#da3633',
+              'red-light':  '#f85149',
+              'red-muted':  'rgba(248,81,73,0.15)',
+              blue:         '#58a6ff',
+              'blue-dark':  '#1f6feb',
+              'blue-muted': 'rgba(56,139,253,0.15)',
+              yellow:       '#d29922',
+            }
+          },
+          fontFamily: {
+            mono: ['ui-monospace','SFMono-Regular','Menlo','Monaco','Consolas','monospace'],
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Alpine.js (deferred — picks up x-data on DOMContentLoaded) -->
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
+  <!-- Mermaid.js — commit graphs -->
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>mermaid.initialize({ startOnLoad: true, theme: 'dark', securityLevel: 'loose' });</script>
+
+  <!-- marked.js — Markdown rendering -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+  <style>
+    /* Hide Alpine-controlled elements until Alpine is ready */
+    [x-cloak] { display: none !important; }
+
+    /* Custom scrollbar (WebKit) */
+    ::-webkit-scrollbar { width: 7px; height: 7px; }
+    ::-webkit-scrollbar-track { background: #0d1117; }
+    ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #58a6ff; }
+
+    /* Smooth tab panel fade-in */
+    .tab-panel { animation: tabFadeIn 0.12s ease; }
+    @keyframes tabFadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to   { opacity: 1; transform: translateY(0); }
     }
 
+    /* Form loading state */
+    .btn-loading { opacity: 0.6; cursor: not-allowed; pointer-events: none; }
+
+    /* Prose styles for README rendering */
+    .prose h1, .prose h2, .prose h3 { font-weight: 600; margin: 0.75rem 0 0.4rem; color: #24292f; }
+    .prose h1 { font-size: 1.4rem; border-bottom: 1px solid #d0d7de; padding-bottom: 0.3rem; }
+    .prose h2 { font-size: 1.15rem; border-bottom: 1px solid #d0d7de; padding-bottom: 0.2rem; }
+    .prose p  { margin: 0.5rem 0; line-height: 1.6; }
+    .prose code { background: #f6f8fa; padding: 0.1em 0.35em; border-radius: 4px; font-size: 0.85em; font-family: monospace; }
+    .prose pre  { background: #f6f8fa; padding: 0.75rem 1rem; border-radius: 6px; overflow-x: auto; font-size: 0.85rem; }
+    .prose ul, .prose ol { padding-left: 1.5rem; margin: 0.5rem 0; }
+    .prose li { margin: 0.2rem 0; }
+    .prose a  { color: #0969da; text-decoration: underline; }
+    .prose blockquote { border-left: 3px solid #d0d7de; padding-left: 1rem; color: #57606a; margin: 0.5rem 0; }
+    .prose hr { border-color: #d0d7de; margin: 1rem 0; }
+  </style>
+</head>
+<body class="bg-gh-bg text-gh-text min-h-full font-sans antialiased">
+
+  <!-- Toast notification container -->
+  <div id="toast-container" class="fixed top-4 right-4 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none"></div>
+
+  {% block content %}{% endblock %}
+
+  <!-- Global JS: toast system + flash messages -->
+  <script>
+    function showToast(message, type) {
+      const palettes = {
+        success: 'bg-gh-green   border-gh-green-light',
+        error:   'bg-gh-red     border-gh-red-light',
+        warning: 'bg-gh-yellow  border-yellow-500',
+        info:    'bg-gh-blue-dark border-gh-blue',
+      };
+      const icons = { success: '✓', error: '✕', warning: '⚠', info: 'ℹ' };
+      const palette = palettes[type] || palettes.info;
+      const icon = icons[type] || icons.info;
+
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      toast.className = `pointer-events-auto ${palette} border text-white text-sm px-4 py-3 rounded-lg shadow-xl flex items-start gap-3 opacity-0 transition-opacity duration-300`;
+      toast.innerHTML = `
+        <span class="font-bold text-base leading-none mt-0.5">${icon}</span>
+        <span class="flex-1 leading-snug">${message}</span>
+        <button onclick="dismissToast(this)" class="text-white/70 hover:text-white text-lg leading-none -mt-0.5 ml-1">&times;</button>
+      `;
+      container.appendChild(toast);
+
+      // Fade in
+      requestAnimationFrame(() => { requestAnimationFrame(() => { toast.classList.remove('opacity-0'); }); });
+
+      // Auto-dismiss after 5s
+      const timer = setTimeout(() => dismissToast(toast.querySelector('button')), 5000);
+      toast._timer = timer;
+    }
+
+    function dismissToast(btn) {
+      const toast = btn.closest ? btn.closest('div') : btn.parentElement;
+      if (!toast) return;
+      clearTimeout(toast._timer);
+      toast.classList.add('opacity-0');
+      setTimeout(() => toast.remove(), 300);
+    }
+
+    // Render server-side flash messages as toasts
     document.addEventListener('DOMContentLoaded', () => {
-      const notifications = document.querySelectorAll('.notification');
-      if (notifications.length > 0) {
-        setTimeout(() => {
-          notifications.forEach(notification => {
-            notification.style.display = 'none';
+      {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+      const flashes = {{ messages | tojson | safe }};
+      flashes.forEach(([cat, msg]) => showToast(msg, cat));
+      {% endif %}
+      {% endwith %}
+    });
+
+    // Show loading state on any form submit
+    document.addEventListener('DOMContentLoaded', () => {
+      document.querySelectorAll('form').forEach(form => {
+        form.addEventListener('submit', () => {
+          form.querySelectorAll('button[type=submit], button:not([type])').forEach(btn => {
+            btn.classList.add('btn-loading');
+            btn.textContent = 'Working…';
           });
-        }, 5000);
-      }
+        });
+      });
     });
   </script>
-  <!-- <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
-  <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js"></script>
-  <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script> -->
-</head>
-<body class="bg-github-dark text-white">
-  <section class="py-6">
-    <div class="container mx-auto">
-      <div class="text-center">
-        <h1 class="text-3xl font-bold">WYAG</h1>
-      </div>
 
-      {% block content %}{% endblock %}
-    </div>
-  </section>
+  {% block scripts %}{% endblock %}
 </body>
 </html>
