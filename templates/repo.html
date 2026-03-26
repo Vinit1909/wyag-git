@@ -3,31 +3,38 @@
 {% block title %}WYAG Web App - Repository{% endblock %}
 
 {% block content %}
-<nav class="bg-black from-gray-700 via-gray-900 to-black py-2 shadow-lg rounded-lg">
-    <div class="container mx-auto flex justify-between items-center px-4">
-        <a class="font-bold text-lg text-white hover:text-blue-600" href="/">WYAG</a>
-        <div class="flex space-x-4">
-            <a class="hover:bg-gray-800 px-3 py-2 rounded text-white hover:text-blue-600" href="#add-file" onclick="scrollToElement('add-file')">Add File</a>
-            <a class="hover:bg-gray-800 px-3 py-2 rounded text-white hover:text-blue-600" href="#commit" onclick="scrollToElement('commit')">Commit</a>
-            <a class="hover:bg-gray-800 px-3 py-2 rounded text-white hover:text-blue-600" href="#status" onclick="scrollToElement('status')">Check Status</a>
-            <a class="hover:bg-gray-800 px-3 py-2 rounded text-white hover:text-blue-600" href="#log" onclick="scrollToElement('log')">Check Log</a>
-            <a class="hover:bg-gray-800 px-3 py-2 rounded text-white hover:text-blue-600" href="#read-file" onclick="scrollToElement('read-file')">Read File</a>
-            <a class="hover:bg-gray-800 px-3 py-2 rounded text-white hover:text-blue-600" href="#delete-file" onclick="scrollToElement('delete-file')">Delete File</a>
-            <a class="hover:bg-gray-800 px-3 py-2 rounded text-white hover:text-blue-600" href="#merge" onclick="scrollToElement('merge')">Merge</a>
+<nav class="bg-black py-2 shadow-lg rounded-lg">
+    <div class="container mx-auto flex flex-wrap justify-between items-center px-4 gap-y-2">
+        <a class="font-bold text-lg text-white hover:text-blue-400" href="/">WYAG</a>
+        <div class="flex flex-wrap gap-1">
+            <a class="hover:bg-gray-800 px-3 py-2 rounded text-white hover:text-blue-400 text-sm" href="#add-file" onclick="scrollToElement('add-file')">Add</a>
+            <a class="hover:bg-gray-800 px-3 py-2 rounded text-white hover:text-blue-400 text-sm" href="#commit" onclick="scrollToElement('commit')">Commit</a>
+            <a class="hover:bg-gray-800 px-3 py-2 rounded text-white hover:text-blue-400 text-sm" href="#status" onclick="scrollToElement('status')">Status</a>
+            <a class="hover:bg-gray-800 px-3 py-2 rounded text-white hover:text-blue-400 text-sm" href="#log" onclick="scrollToElement('log')">Log</a>
+            <a class="hover:bg-gray-800 px-3 py-2 rounded text-white hover:text-blue-400 text-sm" href="#tags" onclick="scrollToElement('tags')">Tags</a>
+            <a class="hover:bg-gray-800 px-3 py-2 rounded text-white hover:text-blue-400 text-sm" href="#search" onclick="scrollToElement('search')">Search</a>
+            <a class="hover:bg-gray-800 px-3 py-2 rounded text-white hover:text-blue-400 text-sm" href="#read-file" onclick="scrollToElement('read-file')">Read</a>
+            <a class="hover:bg-gray-800 px-3 py-2 rounded text-white hover:text-blue-400 text-sm" href="#delete-file" onclick="scrollToElement('delete-file')">Delete</a>
+            {% if current_repo %}
+            <a class="hover:bg-gray-800 px-3 py-2 rounded text-white hover:text-blue-400 text-sm" href="/export">&#8595; Export ZIP</a>
+            {% endif %}
         </div>
     </div>
 </nav>
 
 <div class="mt-6">
     <div class="container-custom">
-        <h2 class="text-center text-xl text-github-blue font-semibold mb-4">Current Repository: {{ current_repo if current_repo else 'None' }}</h2>
+        <h2 class="text-center text-xl text-github-blue font-semibold mb-4">
+            Current Repository: {{ current_repo if current_repo else 'None' }}
+        </h2>
 
+        <!-- Switch Repo -->
         <form action="/switch" method="post" class="mb-6 box-shadow bg-github-darker p-4 rounded-md">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="mb-4">
                 <label class="block mb-2 font-semibold">Switch to Repository</label>
                 <div class="relative">
-                    <select name="repo_name" class="block w-full bg-white border-custom rounded py-2 px-3 leading-tight focus:outline-none focus:bg-white focus:border-gray-500 text-black" required>
+                    <select name="repo_name" class="block w-full bg-white border-custom rounded py-2 px-3 leading-tight focus:outline-none text-black" required>
                         {% for repo in repos %}
                         {% if repo != ".DS_Store" %}
                         <option value="{{ repo }}">{{ repo }}</option>
@@ -37,148 +44,241 @@
                 </div>
             </div>
             <div class="flex justify-center">
-                <button class="w-1/2 bg-black from-gray-700 via-gray-900 to-black text-white py-2 px-4 rounded hover:bg-gray-800 px-3 py-2 rounded text-white hover:text-green-400">Switch Repository</button>
+                <button class="w-1/2 bg-black text-white py-2 px-4 rounded hover:bg-gray-800 hover:text-green-400">Switch Repository</button>
             </div>
         </form>
 
+        <!-- File Browser -->
         <div id="file-structure" class="mb-6 box-shadow bg-github-darker p-4 rounded-md">
-            <button class="w-full bg-black from-gray-700 via-gray-900 to-black text-white py-2 px-4 rounded hover:bg-gray-800 px-3 py-2 rounded text-white hover:text-green-400" onclick="toggleFileStructure()">Files in {{ current_repo if current_repo else 'None' }}</button>
-            <div id="file-structure-content" class="mt-4 bg-white border-custom rounded py-2 px-4 text-black overflow-auto" style="display: none; max-height: 200px;">
-                <pre>
+            <button class="w-full bg-black text-white py-2 px-4 rounded hover:bg-gray-800 hover:text-green-400" onclick="toggleFileStructure()">
+                Files in {{ current_repo if current_repo else 'None' }}
+            </button>
+            <div id="file-structure-content" class="mt-4 bg-white border-custom rounded py-2 px-4 text-black overflow-auto" style="display: none; max-height: 250px;">
+                {% if user_files %}
+                <ul class="space-y-1">
                     {% for file in user_files %}
-                    {{ file }}
+                    <li class="flex items-center justify-between py-1 border-b border-gray-100">
+                        <span class="font-mono text-sm">{{ file }}</span>
+                        <a href="/modify_file?filename={{ file | urlencode }}"
+                           class="ml-4 text-xs bg-blue-500 hover:bg-blue-600 text-white px-2 py-1 rounded shrink-0">
+                            Edit
+                        </a>
+                    </li>
                     {% endfor %}
-                </pre>
+                </ul>
+                {% else %}
+                <p class="text-gray-500 text-sm">No files yet.</p>
+                {% endif %}
             </div>
         </div>
 
         {% if current_repo %}
+
+        <!-- README Preview -->
+        {% if readme_content %}
+        <div id="readme" class="mb-6 box-shadow bg-github-darker p-4 rounded-md">
+            <h3 class="font-semibold text-github-green mb-2">README.md</h3>
+            <div id="readme-rendered" class="bg-white border-custom rounded py-3 px-4 text-black prose max-w-none overflow-auto" style="max-height: 300px;"></div>
+            <script>
+                document.addEventListener('DOMContentLoaded', function() {
+                    const raw = {{ readme_content | tojson }};
+                    const el = document.getElementById('readme-rendered');
+                    if (typeof marked !== 'undefined') {
+                        el.innerHTML = marked.parse(raw);
+                    } else {
+                        el.innerHTML = '<pre>' + raw.replace(/</g,'&lt;') + '</pre>';
+                    }
+                });
+            </script>
+        </div>
+        {% endif %}
+
+        <!-- Add File -->
         <div id="add-file" class="section-spacing mb-6 box-shadow bg-github-darker p-4 rounded-md">
+            <h3 class="font-semibold text-github-green mb-3">Add File</h3>
             <form action="/add" method="post">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="mb-4">
                     <label class="block mb-2 font-semibold">Filename</label>
-                    <input class="block w-full bg-white border-custom rounded py-2 px-3 leading-tight focus:outline-none focus:bg-white focus:border-gray-500 text-black" type="text" name="filename" required>
+                    <input class="block w-full bg-white border-custom rounded py-2 px-3 focus:outline-none text-black" type="text" name="filename" required>
                 </div>
                 <div class="mb-4">
                     <label class="block mb-2 font-semibold">Content</label>
-                    <textarea class="block w-full bg-white border-custom rounded py-2 px-3 leading-tight focus:outline-none focus:bg-white focus:border-gray-500 text-black" name="content" required></textarea>
+                    <textarea class="block w-full bg-white border-custom rounded py-2 px-3 focus:outline-none text-black font-mono text-sm" name="content" rows="6"></textarea>
                 </div>
                 <div class="flex justify-center">
-                    <button class="w-1/2 bg-black from-gray-700 via-gray-900 to-black text-white py-2 px-4 rounded hover:bg-gray-800 px-3 py-2 rounded text-white hover:text-green-400" onclick="scrollToElement('add-file')">Add File</button>
+                    <button class="w-1/2 bg-black text-white py-2 px-4 rounded hover:bg-gray-800 hover:text-green-400">Add File</button>
                 </div>
             </form>
         </div>
 
+        <!-- Upload File -->
+        <div id="upload-file" class="section-spacing mb-6 box-shadow bg-github-darker p-4 rounded-md">
+            <h3 class="font-semibold text-github-green mb-3">Upload File</h3>
+            <form action="/upload" method="post" enctype="multipart/form-data">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="mb-4">
+                    <input type="file" name="file" class="block w-full bg-white border-custom rounded py-2 px-3 focus:outline-none text-black" required>
+                </div>
+                <div class="flex justify-center">
+                    <button class="w-1/2 bg-black text-white py-2 px-4 rounded hover:bg-gray-800 hover:text-green-400">Upload File</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Commit -->
         <div id="commit" class="section-spacing mb-6 box-shadow bg-github-darker p-4 rounded-md">
+            <h3 class="font-semibold text-github-green mb-3">Commit</h3>
             <form action="/commit" method="post">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="mb-4">
                     <label class="block mb-2 font-semibold">Commit Message</label>
-                    <input class="block w-full bg-white border-custom rounded py-2 px-3 leading-tight focus:outline-none focus:bg-white focus:border-gray-500 text-black" type="text" name="message" required>
+                    <input class="block w-full bg-white border-custom rounded py-2 px-3 focus:outline-none text-black" type="text" name="message" required>
                 </div>
                 <div class="flex justify-center">
-                    <button class="w-1/2 bg-black from-gray-700 via-gray-900 to-black text-white py-2 px-4 rounded hover:bg-gray-800 px-3 py-2 rounded text-white hover:text-green-400" onclick="scrollToElement('commit')">Commit</button>
+                    <button class="w-1/2 bg-black text-white py-2 px-4 rounded hover:bg-gray-800 hover:text-green-400">Commit</button>
                 </div>
             </form>
         </div>
 
+        <!-- Status -->
         <div id="status" class="section-spacing mb-6 box-shadow bg-github-darker p-4 rounded-md">
+            <h3 class="font-semibold text-github-green mb-3">Status</h3>
             <form action="/status" method="get">
                 <div class="flex justify-center">
-                    <button class="w-1/2 bg-black from-gray-700 via-gray-900 to-black text-white py-2 px-4 rounded hover:bg-gray-800 px-3 py-2 rounded text-white hover:text-green-400" onclick="scrollToElement('status')">Check Status</button>
+                    <button class="w-1/2 bg-black text-white py-2 px-4 rounded hover:bg-gray-800 hover:text-green-400">Check Status</button>
                 </div>
             </form>
             {% if status_output %}
-            <div class="mt-4 bg-white border-custom rounded py-2 px-4 text-black">
-                <h2 class="font-semibold">Repository Status:</h2>
-                <pre>{{ status_output }}</pre>
+            <div class="mt-4 bg-white border-custom rounded py-2 px-4 text-black overflow-auto" style="max-height: 200px;">
+                <pre class="text-sm">{{ status_output }}</pre>
             </div>
             {% endif %}
         </div>
 
+        <!-- Commit Log (Mermaid graph) -->
         <div id="log" class="section-spacing mb-6 box-shadow bg-github-darker p-4 rounded-md">
+            <h3 class="font-semibold text-github-green mb-3">Commit Log</h3>
             <form action="/log" method="get">
                 <div class="flex justify-center">
-                    <button class="w-1/2 bg-black from-gray-700 via-gray-900 to-black text-white py-2 px-4 rounded hover:bg-gray-800 px-3 py-2 rounded text-white hover:text-green-400" onclick="scrollToElement('log')">Check Log</button>
+                    <button class="w-1/2 bg-black text-white py-2 px-4 rounded hover:bg-gray-800 hover:text-green-400">Refresh Log</button>
                 </div>
             </form>
-            {% if log_output %}
+            {% if log_mermaid %}
+            <div class="mt-4 bg-white border-custom rounded py-3 px-4 text-black overflow-auto">
+                <div class="mermaid text-sm">{{ log_mermaid }}</div>
+            </div>
+            {% elif log_raw %}
             <div class="mt-4 bg-white border-custom rounded py-2 px-4 text-black overflow-auto" style="max-height: 200px;">
-                <h2 class="font-semibold">Commit Logs:</h2>
-                <pre>{{ log_output }}</pre>
+                <pre class="text-sm">{{ log_raw }}</pre>
             </div>
             {% endif %}
         </div>
 
+        <!-- Tags (NEW) -->
+        <div id="tags" class="section-spacing mb-6 box-shadow bg-github-darker p-4 rounded-md">
+            <h3 class="font-semibold text-github-green mb-3">Tags</h3>
+
+            <!-- List tags -->
+            {% if tag_list %}
+            <div class="mb-4 bg-white border-custom rounded py-2 px-4 text-black">
+                <ul class="space-y-1">
+                    {% for tag in tag_list %}
+                    <li class="font-mono text-sm py-1 border-b border-gray-100 last:border-0">🏷 {{ tag }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% else %}
+            <p class="text-sm text-gray-400 mb-3">No tags yet. <a href="/tags" class="text-blue-400 underline">Refresh</a> to load them.</p>
+            {% endif %}
+
+            <!-- Create tag -->
+            <form action="/create_tag" method="post">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="mb-3">
+                    <label class="block mb-1 font-semibold text-sm">Tag Name</label>
+                    <input class="block w-full bg-white border-custom rounded py-2 px-3 focus:outline-none text-black text-sm" type="text" name="tag_name" placeholder="v1.0.0" required>
+                </div>
+                <div class="mb-3">
+                    <label class="block mb-1 font-semibold text-sm">Ref (default: HEAD)</label>
+                    <input class="block w-full bg-white border-custom rounded py-2 px-3 focus:outline-none text-black text-sm" type="text" name="ref" placeholder="HEAD">
+                </div>
+                <div class="flex gap-3">
+                    <button class="flex-1 bg-black text-white py-2 px-4 rounded hover:bg-gray-800 hover:text-green-400 text-sm">Create Tag</button>
+                    <a href="/tags" class="flex-1 text-center bg-gray-700 text-white py-2 px-4 rounded hover:bg-gray-600 text-sm">List All Tags</a>
+                </div>
+            </form>
+        </div>
+
+        <!-- Search in Files (NEW) -->
+        <div id="search" class="section-spacing mb-6 box-shadow bg-github-darker p-4 rounded-md">
+            <h3 class="font-semibold text-github-green mb-3">Search in Files</h3>
+            <form action="/search" method="get">
+                <div class="flex gap-2 mb-3">
+                    <input class="flex-1 bg-white border-custom rounded py-2 px-3 focus:outline-none text-black text-sm" type="text" name="q" placeholder="Search for text..." value="{{ search_query or '' }}">
+                    <button class="bg-black text-white py-2 px-4 rounded hover:bg-gray-800 hover:text-green-400 text-sm">Search</button>
+                </div>
+            </form>
+            {% if search_query is defined and search_query %}
+            <div class="bg-white border-custom rounded py-2 px-4 text-black overflow-auto" style="max-height: 300px;">
+                {% if search_results %}
+                <p class="text-xs text-gray-500 mb-2">{{ search_results | length }} match(es) for "{{ search_query }}"</p>
+                {% for r in search_results %}
+                <div class="mb-2 pb-2 border-b border-gray-100 last:border-0">
+                    <div class="flex items-center gap-2">
+                        <a href="/modify_file?filename={{ r.file | urlencode }}" class="text-blue-600 hover:underline font-mono text-xs font-semibold">{{ r.file }}</a>
+                        <span class="text-gray-400 text-xs">line {{ r.line }}</span>
+                    </div>
+                    <pre class="text-xs text-gray-700 mt-1 whitespace-pre-wrap">{{ r.text }}</pre>
+                </div>
+                {% endfor %}
+                {% else %}
+                <p class="text-sm text-gray-500">No matches found for "{{ search_query }}".</p>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Read File -->
         <div id="read-file" class="section-spacing mb-6 box-shadow bg-github-darker p-4 rounded-md">
+            <h3 class="font-semibold text-github-green mb-3">Read File (from Git object)</h3>
             <form action="/read" method="post">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="mb-4">
                     <label class="block mb-2 font-semibold">Filename</label>
-                    <input class="block w-full bg-white border-custom rounded py-2 px-3 leading-tight focus:outline-none focus:bg-white focus:border-gray-500 text-black" type="text" name="filename" required>
+                    <input class="block w-full bg-white border-custom rounded py-2 px-3 focus:outline-none text-black" type="text" name="filename" required>
                 </div>
                 <div class="flex justify-center">
-                    <button class="w-1/2 bg-black from-gray-700 via-gray-900 to-black text-white py-2 px-4 rounded hover:bg-gray-800 px-3 py-2 rounded text-white hover:text-green-400" onclick="scrollToElement('read-file')">Read File</button>
+                    <button class="w-1/2 bg-black text-white py-2 px-4 rounded hover:bg-gray-800 hover:text-green-400">Read File</button>
                 </div>
             </form>
             {% if file_content %}
             <div class="mt-4 bg-white border-custom rounded py-2 px-4 text-black overflow-auto" style="max-height: 200px;">
-                <h2 class="font-semibold">File Content:</h2>
-                <pre>{{ file_content }}</pre>
+                <pre class="text-sm font-mono">{{ file_content }}</pre>
             </div>
             {% endif %}
         </div>
 
-        <div id="upload-file" class="section-spacing mb-6 box-shadow bg-github-darker p-4 rounded-md">
-            <form action="/upload" method="post" enctype="multipart/form-data">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <div class="mb-4">
-                    <label class="block mb-2 font-semibold">Upload File</label>
-                    <input type="file" name="file" class="block w-full bg-white border-custom rounded py-2 px-3 leading-tight focus:outline-none focus:bg-white focus:border-gray-500 text-black" required>
-                </div>
-                <div class="flex justify-center">
-                    <button class="w-1/2 bg-black from-gray-700 via-gray-900 to-black text-white py-2 px-4 rounded hover:bg-gray-800 px-3 py-2 rounded text-white hover:text-green-400">Upload File</button>
-                </div>
-            </form>
-        </div>
-
-        <div id="modify-file" class="section-spacing mb-6 box-shadow bg-github-darker p-4 rounded-md">
-            <form action="/modify_file" method="get">
-                <div class="mb-4">
-                    <label class="block mb-2 font-semibold">Filename</label>
-                    <input class="block w-full bg-white border-custom rounded py-2 px-3 leading-tight focus:outline-none focus:bg-white focus:border-gray-500 text-black" type="text" name="filename" required>
-                </div>
-                <div class="flex justify-center">
-                    <button class="w-1/2 bg-black from-gray-700 via-gray-900 to-black text-white py-2 px-4 rounded hover:bg-gray-800 px-3 py-2 rounded text-white hover:text-green-400">Modify File</button>
-                </div>
-            </form>
-        </div>
-
+        <!-- Delete File -->
         <div id="delete-file" class="section-spacing mb-6 box-shadow bg-github-darker p-4 rounded-md">
+            <h3 class="font-semibold text-red-400 mb-3">Delete File</h3>
             <form action="/delete_file" method="post">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="mb-4">
                     <label class="block mb-2 font-semibold">Filename</label>
-                    <input class="block w-full bg-white border-custom rounded py-2 px-3 leading-tight focus:outline-none focus:bg-white focus:border-gray-500 text-black" type="text" name="filename" required>
+                    <input class="block w-full bg-white border-custom rounded py-2 px-3 focus:outline-none text-black" type="text" name="filename" required>
                 </div>
                 <div class="flex justify-center">
-                    <button class="w-1/2 bg-black from-gray-700 via-gray-900 to-black text-white py-2 px-4 rounded hover:bg-gray-800 px-3 py-2 rounded text-white hover:text-red-400" onclick="scrollToElement('delete-file')">Delete File</button>
+                    <button class="w-1/2 bg-black text-white py-2 px-4 rounded hover:bg-gray-800 hover:text-red-400"
+                            onclick="return confirm('Delete this file from the repo?')">Delete File</button>
                 </div>
             </form>
         </div>
 
-        <div id="merge" class="section-spacing mb-6 box-shadow bg-github-darker p-4 rounded-md">
-            <form action="/merge" method="post">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <div class="mb-4">
-                    <label class="block mb-2 font-semibold">Branch to Merge</label>
-                    <input class="block w-full bg-white border-custom rounded py-2 px-3 leading-tight focus:outline-none focus:bg-white focus:border-gray-500 text-black" type="text" name="branch" required>
-                </div>
-                <div class="flex justify-center">
-                    <button class="w-1/2 bg-black from-gray-700 via-gray-900 to-black text-white py-2 px-4 rounded hover:bg-gray-800 px-3 py-2 rounded text-white hover:text-blue-400" onclick="scrollToElement('merge')">Merge</button>
-                </div>
-            </form>
+        <!-- Merge (disabled) -->
+        <div id="merge" class="section-spacing mb-6 box-shadow bg-github-darker p-4 rounded-md opacity-60">
+            <h3 class="font-semibold text-gray-400 mb-1">Merge <span class="text-xs bg-gray-600 text-gray-300 rounded px-2 py-0.5 ml-1">Coming Soon</span></h3>
+            <p class="text-gray-400 text-sm">Merge is not yet implemented in this version of WYAG.</p>
         </div>
 
         {% else %}
@@ -191,7 +291,7 @@
 <script>
     function showDialog(message, category) {
         const dialog = document.createElement('div');
-        dialog.className = `fixed top-0 left-0 right-0 bottom-0 flex items-center justify-center bg-opacity-50 bg-gray-800 z-50`;
+        dialog.className = 'fixed top-0 left-0 right-0 bottom-0 flex items-center justify-center bg-opacity-50 bg-gray-800 z-50';
         dialog.innerHTML = `
             <div class="bg-${category === 'success' ? 'green-500' : 'red-500'} text-white p-4 rounded shadow-lg max-w-lg mx-auto">
                 <p>${message}</p>
@@ -202,22 +302,22 @@
     }
 
     function closeDialog(button) {
-        const dialog = button.closest('div.fixed');
-        dialog.remove();
+        button.closest('div.fixed').remove();
     }
 
     function toggleFileStructure() {
-        const fileStructureContent = document.getElementById('file-structure-content');
-        fileStructureContent.style.display = fileStructureContent.style.display === 'none' ? 'block' : 'none';
+        const el = document.getElementById('file-structure-content');
+        el.style.display = el.style.display === 'none' ? 'block' : 'none';
     }
 
     document.addEventListener('DOMContentLoaded', () => {
         const messages = JSON.parse('{{ get_flashed_messages(with_categories=true) | tojson | safe }}');
-        if (messages.length > 0) {
-            messages.forEach(([category, message]) => {
-                showDialog(message, category);
-            });
-        }
+        messages.forEach(([category, message]) => showDialog(message, category));
+
+        {% if scroll_to %}
+        const target = document.getElementById('{{ scroll_to }}');
+        if (target) target.scrollIntoView({ behavior: 'smooth' });
+        {% endif %}
     });
 </script>
 {% endblock %}

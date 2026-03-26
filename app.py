@@ -1,6 +1,9 @@
+import io
 import os
+import re
 import shutil
-from flask import Flask, render_template, request, redirect, url_for, flash, session
+import zipfile
+from flask import Flask, render_template, request, redirect, url_for, flash, session, send_file
 import subprocess
 from dotenv import load_dotenv
 import logging
@@ -34,6 +37,10 @@ if not os.path.exists(REPOS_DIR):
     os.makedirs(REPOS_DIR)
 
 
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
 def list_repos():
     """List all directories in REPOS_DIR excluding hidden files."""
     try:
@@ -46,6 +53,95 @@ def list_repos():
         logger.error(f"Error listing repositories: {e}")
         return []
 
+
+def list_user_files(repo_path):
+    try:
+        user_files = []
+        for root, dirs, files in os.walk(repo_path):
+            if '.git' in dirs:
+                dirs.remove('.git')
+            for file in files:
+                if file != '.DS_Store':
+                    file_path = os.path.relpath(os.path.join(root, file), repo_path)
+                    user_files.append(file_path)
+        return user_files
+    except Exception as e:
+        logger.error(f"Error in list_user_files: {e}")
+        return []
+
+
+def get_repo_file_tree(repo_path):
+    try:
+        file_tree = []
+        for root, dirs, files in os.walk(repo_path):
+            root_path = os.path.relpath(root, repo_path)
+            file_tree.append({'path': root_path, 'dirs': dirs, 'files': files})
+        return file_tree
+    except Exception as e:
+        logger.error(f"Error in get_repo_file_tree: {e}")
+        return []
+
+
+def graphviz_to_mermaid(graphviz_output):
+    """Convert wyag log Graphviz output to Mermaid.js flowchart syntax."""
+    lines = graphviz_output.strip().splitlines()
+    mermaid_lines = ["graph RL"]
+    for line in lines:
+        line = line.strip()
+        # Node: c_SHA [label="SHORT: MESSAGE"]
+        node_match = re.match(r'c_([0-9a-f]+)\s+\[label="(.+?)"\]', line)
+        if node_match:
+            sha = node_match.group(1)
+            label = node_match.group(2).replace('"', "'")
+            mermaid_lines.append(f'  {sha}["{label}"]')
+            continue
+        # Edge: c_SHA1 -> c_SHA2;
+        edge_match = re.match(r'c_([0-9a-f]+)\s+->\s+c_([0-9a-f]+);', line)
+        if edge_match:
+            mermaid_lines.append(f'  {edge_match.group(1)} --> {edge_match.group(2)}')
+    return "\n".join(mermaid_lines)
+
+
+def run_wyag_command(command):
+    current_repo = session.get('current_repo')
+    if not current_repo:
+        return "No repository selected."
+    try:
+        result = subprocess.run(
+            [WYAG_PATH] + command,
+            cwd=current_repo,
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+        logger.info(f"Command: {command}\nOutput: {result.stdout}")
+        return result.stdout
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Command: {command}\nError: {e.stderr}")
+        return e.stderr
+
+
+def get_file_sha(filename):
+    current_repo = session.get('current_repo')
+    try:
+        result = subprocess.run(
+            [WYAG_PATH, 'hash-object', filename],
+            cwd=current_repo,
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+        return result.stdout.strip()
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Error getting SHA for file {filename}: {e.stderr}")
+        return None
+
+
+# ---------------------------------------------------------------------------
+# Routes — Repository management
+# ---------------------------------------------------------------------------
 
 @app.route('/')
 def home():
@@ -67,7 +163,7 @@ def init_repo():
         if not os.path.exists(repo_path):
             os.makedirs(repo_path)
             session['current_repo'] = repo_path
-            output = run_wyag_command(['init'])
+            run_wyag_command(['init'])
             flash(f"Repository '{repo_name}' initialized successfully.", "success")
         else:
             flash("Repository already exists.", "error")
@@ -112,62 +208,49 @@ def delete_repo():
         return "Internal Server Error", 500
 
 
-def get_repo_file_tree(repo_path):
-    try:
-        file_tree = []
-        for root, dirs, files in os.walk(repo_path):
-            root_path = os.path.relpath(root, repo_path)
-            root_dict = {
-                'path': root_path,
-                'dirs': dirs,
-                'files': files
-            }
-            file_tree.append(root_dict)
-        return file_tree
-    except Exception as e:
-        logger.error(f"Error in get_repo_file_tree: {e}")
-        return []
-
-
-def list_user_files(repo_path):
-    try:
-        user_files = []
-        for root, dirs, files in os.walk(repo_path):
-            if '.git' in dirs:
-                dirs.remove('.git')  # exclude .git directory
-            for file in files:
-                if file != '.DS_Store':  # exclude .DS_Store file
-                    file_path = os.path.relpath(os.path.join(root, file), repo_path)
-                    user_files.append(file_path)
-        return user_files
-    except Exception as e:
-        logger.error(f"Error in list_user_files: {e}")
-        return []
-
+# ---------------------------------------------------------------------------
+# Routes — Main repo view
+# ---------------------------------------------------------------------------
 
 @app.route('/repo')
 def repo():
     try:
         current_repo = session.get('current_repo')
+        readme_html = None
         if current_repo:
             status_output = run_wyag_command(['status'])
-            log_output = run_wyag_command(['log'])
+            log_raw = run_wyag_command(['log'])
+            log_mermaid = graphviz_to_mermaid(log_raw) if log_raw and "digraph" in log_raw else None
             user_files = list_user_files(current_repo)
+            # README preview
+            for readme_name in ('README.md', 'readme.md', 'README.MD'):
+                readme_path = os.path.join(current_repo, readme_name)
+                if os.path.exists(readme_path):
+                    with open(readme_path, 'r', errors='replace') as f:
+                        readme_html = f.read()
+                    break
         else:
-            status_output = log_output = "No repository selected."
+            status_output = log_raw = "No repository selected."
+            log_mermaid = None
             user_files = []
         return render_template(
             'repo.html',
             status_output=status_output,
-            log_output=log_output,
+            log_raw=log_raw,
+            log_mermaid=log_mermaid,
             current_repo=current_repo,
             repos=list_repos(),
-            user_files=user_files
+            user_files=user_files,
+            readme_content=readme_html,
         )
     except Exception as e:
         logger.error(f"Error in repo route: {e}")
         return "Internal Server Error", 500
 
+
+# ---------------------------------------------------------------------------
+# Routes — File operations
+# ---------------------------------------------------------------------------
 
 @app.route('/add', methods=['POST'])
 def add_file():
@@ -190,7 +273,7 @@ def add_file():
 def commit():
     try:
         message = request.form['message']
-        run_wyag_command(['add', '.'])  # Ensure all changes are staged before committing
+        run_wyag_command(['add', '.'])
         run_wyag_command(['commit', '-m', message])
         flash(f"Commit '{message}' created.", "success")
         return redirect(url_for('repo'))
@@ -204,13 +287,16 @@ def status():
     try:
         current_repo = session.get('current_repo')
         status_output = run_wyag_command(['status'])
-        log_output = run_wyag_command(['log'])
+        log_raw = run_wyag_command(['log'])
+        log_mermaid = graphviz_to_mermaid(log_raw) if log_raw and "digraph" in log_raw else None
         return render_template(
             'repo.html',
             status_output=status_output,
-            log_output=log_output,
+            log_raw=log_raw,
+            log_mermaid=log_mermaid,
             current_repo=current_repo,
-            repos=list_repos()
+            repos=list_repos(),
+            user_files=list_user_files(current_repo) if current_repo else [],
         )
     except Exception as e:
         logger.error(f"Error in status: {e}")
@@ -221,12 +307,15 @@ def status():
 def log():
     try:
         current_repo = session.get('current_repo')
-        log_output = run_wyag_command(['log'])
+        log_raw = run_wyag_command(['log'])
+        log_mermaid = graphviz_to_mermaid(log_raw) if log_raw and "digraph" in log_raw else None
         return render_template(
             'repo.html',
-            log_output=log_output,
+            log_raw=log_raw,
+            log_mermaid=log_mermaid,
             current_repo=current_repo,
-            repos=list_repos()
+            repos=list_repos(),
+            user_files=list_user_files(current_repo) if current_repo else [],
         )
     except Exception as e:
         logger.error(f"Error in log: {e}")
@@ -246,14 +335,17 @@ def read_file():
             file_content = f"File '{filename}' not found."
             flash(file_content, "error")
         status_output = run_wyag_command(['status'])
-        log_output = run_wyag_command(['log'])
+        log_raw = run_wyag_command(['log'])
+        log_mermaid = graphviz_to_mermaid(log_raw) if log_raw and "digraph" in log_raw else None
         return render_template(
             'repo.html',
             file_content=file_content,
             status_output=status_output,
-            log_output=log_output,
+            log_raw=log_raw,
+            log_mermaid=log_mermaid,
             current_repo=current_repo,
-            repos=list_repos()
+            repos=list_repos(),
+            user_files=list_user_files(current_repo) if current_repo else [],
         )
     except Exception as e:
         logger.error(f"Error in read_file: {e}")
@@ -295,12 +387,11 @@ def upload_file():
         if file.filename == '':
             flash('No selected file', 'error')
             return redirect(url_for('repo'))
-        if file:
-            filepath = os.path.join(current_repo, file.filename)
-            file.save(filepath)
-            run_wyag_command(['add', file.filename])
-            flash(f"File '{file.filename}' uploaded and added.", 'success')
-            return redirect(url_for('repo'))
+        filepath = os.path.join(current_repo, file.filename)
+        file.save(filepath)
+        run_wyag_command(['add', file.filename])
+        flash(f"File '{file.filename}' uploaded and added.", 'success')
+        return redirect(url_for('repo'))
     except Exception as e:
         logger.error(f"Error in upload_file: {e}")
         return "Internal Server Error", 500
@@ -324,6 +415,7 @@ def modify_file():
             return redirect(url_for('repo'))
         else:
             filename = request.args.get('filename')
+            current_content = ""
             if filename:
                 filepath = os.path.join(current_repo, filename)
                 if os.path.exists(filepath):
@@ -331,49 +423,127 @@ def modify_file():
                         current_content = f.read()
                 else:
                     current_content = "File does not exist."
-            else:
-                current_content = ""
             return render_template('modify_file.html', current_content=current_content, filename=filename)
     except Exception as e:
         logger.error(f"Error in modify_file: {e}")
         return "Internal Server Error", 500
 
 
-def run_wyag_command(command):
-    current_repo = session.get('current_repo')
-    if not current_repo:
-        return "No repository selected."
+# ---------------------------------------------------------------------------
+# Routes — Tag management (NEW)
+# ---------------------------------------------------------------------------
+
+@app.route('/tags')
+def tags():
     try:
-        result = subprocess.run(
-            [WYAG_PATH] + command,
-            cwd=current_repo,
-            check=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True
+        current_repo = session.get('current_repo')
+        tag_output = run_wyag_command(['tag'])
+        tag_list = [t.strip() for t in tag_output.strip().splitlines() if t.strip()] if tag_output else []
+        return render_template(
+            'repo.html',
+            tag_list=tag_list,
+            current_repo=current_repo,
+            repos=list_repos(),
+            user_files=list_user_files(current_repo) if current_repo else [],
+            scroll_to='tags',
         )
-        logger.info(f"Command: {command}\nOutput: {result.stdout}")
-        return result.stdout
-    except subprocess.CalledProcessError as e:
-        logger.error(f"Command: {command}\nError: {e.stderr}")
-        return e.stderr
+    except Exception as e:
+        logger.error(f"Error in tags: {e}")
+        return "Internal Server Error", 500
 
 
-def get_file_sha(filename):
-    current_repo = session.get('current_repo')
+@app.route('/create_tag', methods=['POST'])
+def create_tag():
     try:
-        result = subprocess.run(
-            [WYAG_PATH, 'hash-object', filename],
-            cwd=current_repo,
-            check=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True
+        tag_name = request.form['tag_name'].strip()
+        ref = request.form.get('ref', 'HEAD').strip() or 'HEAD'
+        if not tag_name:
+            flash("Tag name cannot be empty.", "error")
+            return redirect(url_for('repo'))
+        run_wyag_command(['tag', tag_name, ref])
+        flash(f"Tag '{tag_name}' created on '{ref}'.", "success")
+        return redirect(url_for('repo'))
+    except Exception as e:
+        logger.error(f"Error in create_tag: {e}")
+        return "Internal Server Error", 500
+
+
+# ---------------------------------------------------------------------------
+# Routes — Export as ZIP (NEW)
+# ---------------------------------------------------------------------------
+
+@app.route('/export')
+def export_repo():
+    try:
+        current_repo = session.get('current_repo')
+        if not current_repo or not os.path.exists(current_repo):
+            flash("No repository selected.", "error")
+            return redirect(url_for('repo'))
+
+        repo_name = os.path.basename(current_repo)
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
+            for root, dirs, files in os.walk(current_repo):
+                dirs[:] = [d for d in dirs if d != '.git']
+                for file in files:
+                    if file == '.DS_Store':
+                        continue
+                    full_path = os.path.join(root, file)
+                    arcname = os.path.join(repo_name, os.path.relpath(full_path, current_repo))
+                    zf.write(full_path, arcname)
+        buf.seek(0)
+        return send_file(
+            buf,
+            mimetype='application/zip',
+            as_attachment=True,
+            download_name=f"{repo_name}.zip"
         )
-        return result.stdout.strip()
-    except subprocess.CalledProcessError as e:
-        logger.error(f"Error getting SHA for file {filename}: {e.stderr}")
-        return None
+    except Exception as e:
+        logger.error(f"Error in export_repo: {e}")
+        return "Internal Server Error", 500
+
+
+# ---------------------------------------------------------------------------
+# Routes — Search in files (NEW)
+# ---------------------------------------------------------------------------
+
+@app.route('/search', methods=['GET'])
+def search():
+    try:
+        current_repo = session.get('current_repo')
+        query = request.args.get('q', '').strip()
+        results = []
+        if query and current_repo:
+            for root, dirs, files in os.walk(current_repo):
+                dirs[:] = [d for d in dirs if d != '.git']
+                for filename in files:
+                    if filename == '.DS_Store':
+                        continue
+                    full_path = os.path.join(root, filename)
+                    rel_path = os.path.relpath(full_path, current_repo)
+                    try:
+                        with open(full_path, 'r', errors='replace') as f:
+                            for lineno, line in enumerate(f, 1):
+                                if query.lower() in line.lower():
+                                    results.append({
+                                        'file': rel_path,
+                                        'line': lineno,
+                                        'text': line.rstrip(),
+                                    })
+                    except Exception:
+                        continue
+        return render_template(
+            'repo.html',
+            search_query=query,
+            search_results=results,
+            current_repo=current_repo,
+            repos=list_repos(),
+            user_files=list_user_files(current_repo) if current_repo else [],
+            scroll_to='search',
+        )
+    except Exception as e:
+        logger.error(f"Error in search: {e}")
+        return "Internal Server Error", 500
 
 
 if __name__ == '__main__':
