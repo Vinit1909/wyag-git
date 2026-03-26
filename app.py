@@ -297,6 +297,7 @@ def status():
             current_repo=current_repo,
             repos=list_repos(),
             user_files=list_user_files(current_repo) if current_repo else [],
+            initial_tab='changes',
         )
     except Exception as e:
         logger.error(f"Error in status: {e}")
@@ -316,6 +317,7 @@ def log():
             current_repo=current_repo,
             repos=list_repos(),
             user_files=list_user_files(current_repo) if current_repo else [],
+            initial_tab='history',
         )
     except Exception as e:
         logger.error(f"Error in log: {e}")
@@ -346,6 +348,7 @@ def read_file():
             current_repo=current_repo,
             repos=list_repos(),
             user_files=list_user_files(current_repo) if current_repo else [],
+            initial_tab='objects',
         )
     except Exception as e:
         logger.error(f"Error in read_file: {e}")
@@ -445,7 +448,7 @@ def tags():
             current_repo=current_repo,
             repos=list_repos(),
             user_files=list_user_files(current_repo) if current_repo else [],
-            scroll_to='tags',
+            initial_tab='history',
         )
     except Exception as e:
         logger.error(f"Error in tags: {e}")
@@ -539,7 +542,7 @@ def search():
             current_repo=current_repo,
             repos=list_repos(),
             user_files=list_user_files(current_repo) if current_repo else [],
-            scroll_to='search',
+            initial_tab='search',
         )
     except Exception as e:
         logger.error(f"Error in search: {e}")

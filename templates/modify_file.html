@@ -1,26 +1,139 @@
 {% extends "base.html" %}
 
-{% block title %}Modify File{% endblock %}
+{% block title %}WYAG — Edit {{ filename or 'File' }}{% endblock %}
 
 {% block content %}
-<div class="container-custom mt-6 bg-github-darker p-6 rounded-md">
-    <form action="/modify_file" method="post" class="mb-6 box-shadow bg-github-darker p-4 rounded-md">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <div class="mb-4">
-            <label class="block mb-2 font-semibold">Filename</label>
-            <input class="block w-full bg-white border-custom rounded py-2 px-3 leading-tight focus:outline-none focus:bg-white focus:border-gray-500 text-black" type="text" name="filename" value="{{ filename }}" readonly>
-        </div>
-        <div class="mb-4">
-            <label class="block mb-2 font-semibold">Current Content</label>
-            <textarea class="block w-full bg-gray-200 border-custom rounded py-2 px-3 leading-tight focus:outline-none focus:bg-gray-200 focus:border-gray-500 text-black" readonly>{{ current_content }}</textarea>
-        </div>
-        <div class="mb-4">
-            <label class="block mb-2 font-semibold">New Content</label>
-            <textarea class="block w-full bg-white border-custom rounded py-2 px-3 leading-tight focus:outline-none focus:bg-white focus:border-gray-500 text-black" name="new_content" required></textarea>
-        </div>
-        <div class="flex justify-center">
-            <button class="w-1/2 bg-black from-gray-700 via-gray-900 to-black text-white py-2 px-4 rounded hover:bg-gray-800 px-3 py-2 rounded text-white hover:text-green-400">Modify File</button>
-        </div>
+<div class="min-h-screen flex flex-col">
+
+  <!-- Navbar -->
+  <nav class="flex-shrink-0 bg-gh-surface border-b border-gh-border px-4 py-2.5 flex items-center gap-4">
+    <a href="/" class="flex items-center gap-2 text-gh-text font-bold hover:text-gh-blue transition-colors text-sm">
+      <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-gh-blue" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <circle cx="6" cy="4" r="2"/><circle cx="6" cy="20" r="2"/><circle cx="18" cy="8" r="2"/>
+        <path stroke-linecap="round" d="M6 6v10M6 6c3 0 5 1 6 3s3 3 6 3"/>
+      </svg>
+      WYAG
+    </a>
+    <span class="text-gh-border">›</span>
+    <a href="/repo" class="text-gh-muted hover:text-gh-text text-sm transition-colors">Repository</a>
+    <span class="text-gh-border">›</span>
+    <span class="text-gh-text text-sm font-mono font-medium">{{ filename or 'Edit File' }}</span>
+  </nav>
+
+  <!-- Editor layout -->
+  <div class="flex-1 flex flex-col max-w-5xl mx-auto w-full px-6 py-6 gap-5">
+
+    <!-- File info bar -->
+    <div class="flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <span class="text-gh-muted text-xs uppercase tracking-wider">Editing</span>
+        <code class="bg-gh-surface border border-gh-border text-gh-blue px-3 py-1 rounded-lg text-sm font-mono">
+          {{ filename or '' }}
+        </code>
+      </div>
+      <!-- Detect language label -->
+      <span id="lang-badge" class="text-xs bg-gh-overlay border border-gh-border text-gh-muted px-2 py-1 rounded-lg font-mono"></span>
+    </div>
+
+    <!-- Monaco Editor -->
+    <div class="flex-1 flex flex-col gap-2">
+      <label class="text-xs text-gh-muted uppercase tracking-wider">Content</label>
+      <div id="monaco-editor"
+           class="w-full border border-gh-border rounded-xl overflow-hidden shadow-lg"
+           style="height: calc(100vh - 320px); min-height: 320px;">
+      </div>
+    </div>
+
+    <!-- Form (hidden textarea, submitted with Monaco content) -->
+    <form action="/modify_file" method="post" id="edit-form" class="flex items-center gap-3">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="filename" value="{{ filename or '' }}">
+      <input type="hidden" name="new_content" id="new_content_input">
+
+      <a href="/repo"
+         class="text-sm border border-gh-border text-gh-muted hover:text-gh-text hover:border-gh-text px-4 py-2 rounded-lg transition-colors">
+        Cancel
+      </a>
+      <button type="submit" id="save-btn"
+        class="bg-gh-green hover:bg-gh-green-light text-white text-sm font-semibold px-6 py-2 rounded-lg transition-colors flex items-center gap-2">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+        </svg>
+        Save &amp; Stage
+      </button>
     </form>
+
+  </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<!-- Monaco Editor loader -->
+<script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
+<script>
+  require.config({ paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs' } });
+
+  require(['vs/editor/editor.main'], function() {
+
+    const filename = {{ filename | tojson }};
+    const currentContent = {{ current_content | tojson }};
+
+    // Language detection by extension
+    const ext = filename ? filename.split('.').pop().toLowerCase() : '';
+    const langMap = {
+      py: 'python',   js: 'javascript', ts: 'typescript',
+      html: 'html',   css: 'css',       scss: 'scss',
+      md: 'markdown', json: 'json',     yaml: 'yaml', yml: 'yaml',
+      sh: 'shell',    bash: 'shell',    zsh: 'shell',
+      xml: 'xml',     sql: 'sql',       go: 'go',
+      rs: 'rust',     java: 'java',     c: 'c',
+      cpp: 'cpp',     h: 'cpp',         rb: 'ruby',
+      php: 'php',     kt: 'kotlin',     swift: 'swift',
+      txt: 'plaintext',
+    };
+    const language = langMap[ext] || 'plaintext';
+
+    // Show language badge
+    const badge = document.getElementById('lang-badge');
+    if (badge) badge.textContent = language;
+
+    // Create editor
+    const editor = monaco.editor.create(document.getElementById('monaco-editor'), {
+      value: currentContent || '',
+      language: language,
+      theme: 'vs-dark',
+      fontSize: 14,
+      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+      lineNumbers: 'on',
+      minimap: { enabled: false },
+      wordWrap: 'on',
+      scrollBeyondLastLine: false,
+      automaticLayout: true,
+      renderLineHighlight: 'line',
+      smoothScrolling: true,
+      cursorSmoothCaretAnimation: 'on',
+      padding: { top: 12, bottom: 12 },
+    });
+
+    // Copy editor content to hidden input before form submit
+    const form = document.getElementById('edit-form');
+    const hiddenInput = document.getElementById('new_content_input');
+    const saveBtn = document.getElementById('save-btn');
+
+    form.addEventListener('submit', function(e) {
+      hiddenInput.value = editor.getValue();
+    });
+
+    // Ctrl+S / Cmd+S shortcut to save
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, function() {
+      hiddenInput.value = editor.getValue();
+      form.submit();
+    });
+
+    // Update save button state when content changes
+    editor.onDidChangeModelContent(() => {
+      saveBtn.classList.remove('opacity-60');
+    });
+  });
+</script>
 {% endblock %}
