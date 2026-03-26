@@ -1,0 +1,24 @@
+version: '3.9'
+
+services:
+  web:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      # Copy .env.example → .env and fill in a real secret key
+      - FLASK_SECRET_KEY=${FLASK_SECRET_KEY}
+    volumes:
+      # Named volume keeps repositories across container restarts
+      - repos_data:/app/repos
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  repos_data:
+    driver: local
